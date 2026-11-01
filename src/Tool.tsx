@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState, type DragEvent, type ReactNode } from 'react'
-import { Button, Checkbox, Tab, Tabs, TextField } from 'material/react'
+import { Button, Checkbox, Tab, Tabs } from 'material/react'
 import { Shell } from './Shell.tsx'
 import { BackToHome } from './router.tsx'
 import { analyze, CATEGORIES, DOCS, fmtBytes, LIMITS, parseHistory, project, type Analysis } from './analyze.ts'
@@ -88,16 +88,17 @@ export default function Tool() {
       </section>
 
       <section className="panel" onDragOver={e => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
-        <div className="grid cols-2">
-          <TextField
-            variant="outlined"
-            type="multiline"
-            label="Paste history JSON"
-            value={paste}
-            placeholder={'{\n  "events": [\n    { "eventId": "1", "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_STARTED", ... }\n  ]\n}'}
-            onChange={(e) => setPaste(String((e as CustomEvent<{ value?: string }>).detail?.value ?? (e.target as HTMLInputElement).value ?? ''))}
-          />
-          <div style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
+        <div className="grid cols-2 ingest-grid">
+          <label className="paste-field">
+            <span className="paste-label">Paste history JSON</span>
+            <textarea
+              value={paste}
+              spellCheck={false}
+              placeholder={'{\n  "events": [\n    { "eventId": "1", "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_STARTED", ... }\n  ]\n}'}
+              onChange={(e) => setPaste(e.target.value)}
+            />
+          </label>
+          <div className="ingest-side">
             <label className={`drop ${over ? 'over' : ''}`}>
               <input type="file" accept=".json,.jsonl,application/json" multiple onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
               <strong>Drop history files here, or click to choose</strong>

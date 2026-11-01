@@ -68,6 +68,53 @@ m-text-field { display: block; width: 100%; min-height: 220px; }
 m-button, m-icon-button { vertical-align: middle; }
 .appbar-actions { display: inline-flex; align-items: center; gap: 2px; }
 
+/* Paste column fills the full left grid track */
+.ingest-grid {
+  align-items: stretch;
+}
+.ingest-side {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.paste-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 100%;
+  align-self: stretch;
+}
+.paste-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mtrl-sys-color-on-surface-variant);
+}
+.paste-field textarea {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 22rem;
+  height: 100%;
+  resize: vertical;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--mtrl-sys-color-outline);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--mtrl-sys-color-surface-container-highest) 72%, transparent);
+  color: var(--mtrl-sys-color-on-surface);
+  font-family: 'Roboto Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.45;
+  box-sizing: border-box;
+}
+.paste-field textarea:focus {
+  outline: 2px solid var(--mtrl-sys-color-primary);
+  outline-offset: 1px;
+  border-color: var(--mtrl-sys-color-primary);
+}
+
 /* Gemini-like ambient washes */
 .ambient {
   position: fixed;
