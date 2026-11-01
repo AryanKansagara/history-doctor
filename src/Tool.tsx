@@ -1,4 +1,5 @@
 import { useDeferredValue, useMemo, useState, type DragEvent, type ReactNode } from 'react'
+import { Button, Checkbox, Tab, Tabs, TextField } from 'material/react'
 import { Shell } from './Shell.tsx'
 import { BackToHome } from './router.tsx'
 import { analyze, CATEGORIES, DOCS, fmtBytes, LIMITS, parseHistory, project, type Analysis } from './analyze.ts'
@@ -88,11 +89,14 @@ export default function Tool() {
 
       <section className="panel" onDragOver={e => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
         <div className="grid cols-2">
-          <label style={{ display: 'grid', gap: 6 }}>
-            <strong style={{ fontSize: 14 }}>Paste history JSON</strong>
-            <textarea value={paste} onChange={e => setPaste(e.target.value)} spellCheck={false}
-              placeholder={'{\n  "events": [\n    { "eventId": "1", "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_STARTED", ... }\n  ]\n}'} />
-          </label>
+          <TextField
+            variant="outlined"
+            type="multiline"
+            label="Paste history JSON"
+            value={paste}
+            placeholder={'{\n  "events": [\n    { "eventId": "1", "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_STARTED", ... }\n  ]\n}'}
+            onChange={(e) => setPaste(String((e as CustomEvent<{ value?: string }>).detail?.value ?? (e.target as HTMLInputElement).value ?? ''))}
+          />
           <div style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
             <label className={`drop ${over ? 'over' : ''}`}>
               <input type="file" accept=".json,.jsonl,application/json" multiple onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
@@ -106,7 +110,9 @@ export default function Tool() {
             <div>
               <div className="muted" style={{ fontSize: 12.5, marginBottom: 6 }}>Or load a sample</div>
               <div className="row">
-                {SAMPLES.map((s, i) => <button key={s.id} className="btn ghost" onClick={() => loadSample(i)}>{s.label}</button>)}
+                {SAMPLES.map((s, i) => (
+                  <Button key={s.id} variant="outlined" onClick={() => loadSample(i)}>{s.label}</Button>
+                ))}
               </div>
             </div>
           </div>
@@ -123,7 +129,7 @@ export default function Tool() {
                   </span>
                 )
               })}
-              {sources.length > 1 && <button className="btn ghost" onClick={() => setSources([])}>Clear all</button>}
+              {sources.length > 1 && <Button variant="text" onClick={() => setSources([])}>Clear all</Button>}
             </div>
             {results.filter(r => r.error).map(r => (
               <div key={r.name} className="finding bad"><strong>{r.name}:</strong> {r.error}</div>
@@ -138,13 +144,22 @@ export default function Tool() {
         <>
           <Overview a={a} price={price} actions={actionsOf(a)} />
           <section className="panel">
-            <div className="tabs" role="tablist">
+            <Tabs
+              value={tab}
+              onChange={(e) => {
+                const v = (e as CustomEvent<{ value?: string | null }>).detail?.value
+                if (v && (TABS as readonly string[]).includes(v)) setTab(v as Tab)
+              }}
+            >
               {TABS.map(t => (
-                <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
-                  {t}{t === 'Recommendations' && <span className={`badge ${a.recs[0].severity === 'info' ? 'info' : a.recs[0].severity}`}>{a.recs.filter(r => r.title !== 'No issues found').length}</span>}
-                </button>
+                <Tab
+                  key={t}
+                  value={t}
+                  label={t}
+                  badge={t === 'Recommendations' ? String(a.recs.filter(r => r.title !== 'No issues found').length) : undefined}
+                />
               ))}
-            </div>
+            </Tabs>
             {tab === 'Recommendations' && <Recs a={a} />}
             {tab === 'Actions & cost' && (
               <Cost a={a} price={price} setPrice={setPrice} perDay={perDay} setPerDay={setPerDay} withHeartbeats={withHeartbeats} setWithHeartbeats={setWithHeartbeats} />
@@ -328,7 +343,10 @@ function Cost({ a, price, setPrice, perDay, setPerDay, withHeartbeats, setWithHe
           <ul className="muted" style={{ margin: 0, paddingLeft: 18, fontSize: 13.5 }}>
             <li>
               Activity heartbeats{a.heartbeatEstimate ? ` (up to ~${num(a.heartbeatEstimate)} here)` : ''}.{' '}
-              <label className="check"><input type="checkbox" checked={withHeartbeats} onChange={e => setWithHeartbeats(e.target.checked)} />include estimate</label>
+              <Checkbox
+                checked={withHeartbeats}
+                onChange={(e) => setWithHeartbeats(Boolean((e as CustomEvent<{ checked?: boolean }>).detail?.checked))}
+              >include estimate</Checkbox>
             </li>
             <li>Queries, rejected Updates, Workflow Task heartbeats of long Local Activities.</li>
             <li>Schedule create/update/delete, Workflow exports, and Temporal Cloud storage (billed separately per GB-hour).</li>

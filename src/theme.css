@@ -1,130 +1,77 @@
-/* Material Design 3 — https://m3.material.io/ styles/color/the-color-system/tokens */
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Flex:opsz,wght@8..144,400;8..144,500;8..144,700&family=Roboto+Mono:wght@400;500&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap');
-
-:root, [data-theme='light'] {
-  color-scheme: light;
-  --md-sys-color-primary: #445e91;
-  --md-sys-color-on-primary: #ffffff;
-  --md-sys-color-primary-container: #d8e2ff;
-  --md-sys-color-on-primary-container: #001a41;
-  --md-sys-color-secondary: #575e71;
-  --md-sys-color-on-secondary: #ffffff;
-  --md-sys-color-secondary-container: #dbe2f9;
-  --md-sys-color-on-secondary-container: #141b2c;
-  --md-sys-color-tertiary: #715573;
-  --md-sys-color-on-tertiary: #ffffff;
-  --md-sys-color-tertiary-container: #fbd7fc;
-  --md-sys-color-on-tertiary-container: #29132d;
-  --md-sys-color-error: #ba1a1a;
-  --md-sys-color-on-error: #ffffff;
-  --md-sys-color-error-container: #ffdad6;
-  --md-sys-color-on-error-container: #410002;
-  --md-sys-color-surface: #f9f9ff;
-  --md-sys-color-on-surface: #1a1b20;
-  --md-sys-color-surface-variant: #e1e2ec;
-  --md-sys-color-on-surface-variant: #44474f;
-  --md-sys-color-surface-container-lowest: #ffffff;
-  --md-sys-color-surface-container-low: #f3f3fa;
-  --md-sys-color-surface-container: #ededf4;
-  --md-sys-color-surface-container-high: #e7e8ee;
-  --md-sys-color-surface-container-highest: #e2e2e9;
-  --md-sys-color-outline: #74777f;
-  --md-sys-color-outline-variant: #c4c6d0;
-  --md-sys-color-inverse-surface: #2f3036;
-  --md-sys-color-inverse-on-surface: #f0f0f7;
-  --md-sys-color-inverse-primary: #adc6ff;
-  --md-sys-color-success: #386a20;
-  --md-sys-color-on-success: #ffffff;
-  --md-sys-color-success-container: #b8f397;
-  --md-sys-color-on-success-container: #072100;
-  --md-sys-color-warning: #7d5700;
-  --md-sys-color-on-warning: #ffffff;
-  --md-sys-color-warning-container: #ffdeaa;
-  --md-sys-color-on-warning-container: #271900;
-  --md-sys-elevation-1: 0 1px 2px rgb(0 0 0 / .12), 0 1px 3px 1px rgb(0 0 0 / .08);
-  --md-sys-elevation-2: 0 1px 2px rgb(0 0 0 / .14), 0 2px 6px 2px rgb(0 0 0 / .10);
+/* Layout + aliases on top of material (md3.io) ocean theme tokens */
+:root {
+  --bg: var(--mtrl-sys-color-surface);
+  --panel: var(--mtrl-sys-color-surface-container-lowest);
+  --panel-2: var(--mtrl-sys-color-surface-container-low);
+  --border: var(--mtrl-sys-color-outline-variant);
+  --text: var(--mtrl-sys-color-on-surface);
+  --muted: var(--mtrl-sys-color-on-surface-variant);
+  --accent: var(--mtrl-sys-color-primary);
+  --accent-weak: var(--mtrl-sys-color-primary-container);
+  --good: var(--mtrl-sys-color-success);
+  --good-weak: color-mix(in srgb, var(--mtrl-sys-color-success) 18%, var(--mtrl-sys-color-surface));
+  --warn: var(--mtrl-sys-color-warning);
+  --warn-weak: color-mix(in srgb, var(--mtrl-sys-color-warning) 18%, var(--mtrl-sys-color-surface));
+  --bad: var(--mtrl-sys-color-error);
+  --bad-weak: var(--mtrl-sys-color-error-container);
+  --shadow: none;
   --md-sys-shape-corner-extra-small: 4px;
   --md-sys-shape-corner-small: 8px;
   --md-sys-shape-corner-medium: 12px;
   --md-sys-shape-corner-large: 16px;
   --md-sys-shape-corner-full: 9999px;
-
-  /* Compatibility aliases used by existing components */
-  --bg: var(--md-sys-color-surface);
-  --panel: var(--md-sys-color-surface-container-lowest);
-  --panel-2: var(--md-sys-color-surface-container-low);
-  --border: var(--md-sys-color-outline-variant);
-  --text: var(--md-sys-color-on-surface);
-  --muted: var(--md-sys-color-on-surface-variant);
-  --accent: var(--md-sys-color-primary);
-  --accent-weak: var(--md-sys-color-primary-container);
-  --good: var(--md-sys-color-success);
-  --good-weak: var(--md-sys-color-success-container);
-  --warn: var(--md-sys-color-warning);
-  --warn-weak: var(--md-sys-color-warning-container);
-  --bad: var(--md-sys-color-error);
-  --bad-weak: var(--md-sys-color-error-container);
-  --shadow: var(--md-sys-elevation-1);
-}
-
-[data-theme='dark'] {
-  color-scheme: dark;
-  --md-sys-color-primary: #adc6ff;
-  --md-sys-color-on-primary: #112f60;
-  --md-sys-color-primary-container: #2b4678;
-  --md-sys-color-on-primary-container: #d8e2ff;
-  --md-sys-color-secondary: #bfc6dc;
-  --md-sys-color-on-secondary: #293041;
-  --md-sys-color-secondary-container: #3f4759;
-  --md-sys-color-on-secondary-container: #dbe2f9;
-  --md-sys-color-tertiary: #debcdf;
-  --md-sys-color-on-tertiary: #402843;
-  --md-sys-color-tertiary-container: #583e5b;
-  --md-sys-color-on-tertiary-container: #fbd7fc;
-  --md-sys-color-error: #ffb4ab;
-  --md-sys-color-on-error: #690005;
-  --md-sys-color-error-container: #93000a;
-  --md-sys-color-on-error-container: #ffdad6;
-  --md-sys-color-surface: #121318;
-  --md-sys-color-on-surface: #e2e2e9;
-  --md-sys-color-surface-variant: #44474f;
-  --md-sys-color-on-surface-variant: #c4c6d0;
-  --md-sys-color-surface-container-lowest: #0d0e13;
-  --md-sys-color-surface-container-low: #1a1b20;
-  --md-sys-color-surface-container: #1e1f25;
-  --md-sys-color-surface-container-high: #282a2f;
-  --md-sys-color-surface-container-highest: #33343a;
-  --md-sys-color-outline: #8e9099;
-  --md-sys-color-outline-variant: #44474f;
-  --md-sys-color-inverse-surface: #e2e2e9;
-  --md-sys-color-inverse-on-surface: #2f3036;
-  --md-sys-color-inverse-primary: #445e91;
-  --md-sys-color-success: #9cd67e;
-  --md-sys-color-on-success: #143800;
-  --md-sys-color-success-container: #255107;
-  --md-sys-color-on-success-container: #b8f397;
-  --md-sys-color-warning: #fabc49;
-  --md-sys-color-on-warning: #422c00;
-  --md-sys-color-warning-container: #5e4100;
-  --md-sys-color-on-warning-container: #ffdeaa;
+  --md-sys-color-primary: var(--mtrl-sys-color-primary);
+  --md-sys-color-on-primary: var(--mtrl-sys-color-on-primary);
+  --md-sys-color-primary-container: var(--mtrl-sys-color-primary-container);
+  --md-sys-color-on-primary-container: var(--mtrl-sys-color-on-primary-container);
+  --md-sys-color-secondary-container: var(--mtrl-sys-color-secondary-container);
+  --md-sys-color-on-secondary-container: var(--mtrl-sys-color-on-secondary-container);
+  --md-sys-color-surface: var(--mtrl-sys-color-surface);
+  --md-sys-color-on-surface: var(--mtrl-sys-color-on-surface);
+  --md-sys-color-on-surface-variant: var(--mtrl-sys-color-on-surface-variant);
+  --md-sys-color-surface-container-lowest: var(--mtrl-sys-color-surface-container-lowest);
+  --md-sys-color-surface-container-low: var(--mtrl-sys-color-surface-container-low);
+  --md-sys-color-surface-container: var(--mtrl-sys-color-surface-container);
+  --md-sys-color-surface-container-high: var(--mtrl-sys-color-surface-container-high);
+  --md-sys-color-surface-container-highest: var(--mtrl-sys-color-surface-container-highest);
+  --md-sys-color-outline: var(--mtrl-sys-color-outline);
+  --md-sys-color-outline-variant: var(--mtrl-sys-color-outline-variant);
+  --md-sys-color-error: var(--mtrl-sys-color-error);
+  --md-sys-color-error-container: var(--mtrl-sys-color-error-container);
+  --md-sys-color-on-error-container: var(--mtrl-sys-color-on-error-container);
+  --md-sys-color-success: var(--mtrl-sys-color-success);
+  --md-sys-color-success-container: var(--good-weak);
+  --md-sys-color-on-success-container: var(--mtrl-sys-color-success);
+  --md-sys-color-warning: var(--mtrl-sys-color-warning);
+  --md-sys-color-warning-container: var(--warn-weak);
+  --md-sys-color-on-warning-container: var(--mtrl-sys-color-warning);
   --md-sys-elevation-1: none;
   --md-sys-elevation-2: none;
-  --shadow: none;
 }
+
+.shell-tagline {
+  max-width: 1180px;
+  margin: -4px auto 0;
+  padding: 0 20px 8px;
+  font-size: 13px;
+}
+.logo svg { width: 22px; height: 22px; display: block; color: var(--mtrl-sys-color-on-primary-container); }
+.logo {
+  width: 36px; height: 36px; border-radius: 8px;
+  display: grid; place-items: center;
+  background: var(--mtrl-sys-color-primary-container);
+  color: var(--mtrl-sys-color-on-primary-container);
+}
+m-top-app-bar { display: block; position: sticky; top: 0; z-index: 20; }
+m-tabs { display: block; margin-bottom: 16px; width: 100%; }
+m-text-field { display: block; width: 100%; min-height: 220px; }
+m-button, m-icon-button { vertical-align: middle; }
 
 * { box-sizing: border-box; }
-html { color-scheme: light; }
-[data-theme='dark'] { color-scheme: dark; }
 
-body {
-  margin: 0;
-  background: var(--md-sys-color-surface);
-  color: var(--md-sys-color-on-surface);
-  font: 400 15px/1.55 'Roboto Flex', Roboto, system-ui, sans-serif;
-  font-optical-sizing: auto;
-  -webkit-font-smoothing: antialiased;
-}
+
+
+body { /* fonts/colors from material/styles */ }
 
 .material-symbols-outlined {
   font-family: 'Material Symbols Outlined';
