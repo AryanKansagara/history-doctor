@@ -7,7 +7,7 @@ import 'material/themes/vibrant'
 import 'material/themes/ocean'
 import 'material/themes/sunset'
 import 'material/themes/forest'
-import 'material/themes/spring'
+import './brand-themes.css'
 import './theme.css'
 import { applyTheme, readThemeId, readThemeMode } from './themeMode.ts'
 import App from './App.tsx'
@@ -19,3 +19,4 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
