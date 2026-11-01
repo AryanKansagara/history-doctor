@@ -7,7 +7,7 @@ export const STORAGE_PREFIX = 'hd'
 export const DEFAULT_THEME = 'brand'
 
 export const THEMES: ThemeOption[] = [
-  { id: 'brand', label: 'Temporal', hint: 'Indigo workflow' },
+  { id: 'brand', label: 'Temporal', hint: 'temporal.io indigo + neon' },
   { id: 'expressive', label: 'Aurora', hint: 'Teal + orchid' },
   { id: 'vibrant', label: 'Nova', hint: 'Bright violet' },
   { id: 'ocean', label: 'Tide', hint: 'Cool blue' },
@@ -23,7 +23,8 @@ const THEME_KEY = `${STORAGE_PREFIX}:colorTheme`
 export function readThemeMode(): ThemeMode {
   const saved = localStorage.getItem(MODE_KEY) as ThemeMode | null
   if (saved === 'light' || saved === 'dark') return saved
-  return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  // Match the company site’s default look when visitor has no preference stored
+  return 'dark'
 }
 
 export function readThemeId(): ThemeId {
