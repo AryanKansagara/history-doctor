@@ -1,7 +1,6 @@
-import { useState, type ReactNode } from 'react'
-import { IconButton, TopAppBar } from 'material/react'
-import { icon } from './icons.ts'
-import { applyThemeMode, readThemeMode, type ThemeMode } from './themeMode.ts'
+import type { ReactNode } from 'react'
+import { TopAppBar } from 'material/react'
+import { AmbientBackground, ThemeControls } from './ThemeChrome.tsx'
 
 export function Shell({
   name,
@@ -13,28 +12,10 @@ export function Shell({
   icon?: string
   children: ReactNode
 }) {
-  const [mode, setMode] = useState<ThemeMode>(() => readThemeMode())
-  const toggle = () => {
-    const next: ThemeMode = mode === 'dark' ? 'light' : 'dark'
-    applyThemeMode(next)
-    setMode(next)
-  }
-
   return (
     <>
-      <TopAppBar
-        type="center"
-        headline={name}
-        no-scroll
-        trailing={
-          <IconButton
-            variant="standard"
-            icon={mode === 'dark' ? icon.lightMode : icon.darkMode}
-            aria-label={mode === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-            onClick={toggle}
-          />
-        }
-      />
+      <AmbientBackground />
+      <TopAppBar type="center" headline={name} no-scroll trailing={<ThemeControls />} />
       <p className="shell-tagline muted">{tagline}</p>
       <main className="container">{children}</main>
       <footer className="container footer muted">

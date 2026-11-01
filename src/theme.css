@@ -1,4 +1,4 @@
-/* Layout + aliases on top of material (md3.io) ocean theme tokens */
+/* Layout + aliases on top of material (md3.io) dynamic themes */
 :root {
   --bg: var(--mtrl-sys-color-surface);
   --panel: var(--mtrl-sys-color-surface-container-lowest);
@@ -62,16 +62,89 @@
   background: var(--mtrl-sys-color-primary-container);
   color: var(--mtrl-sys-color-on-primary-container);
 }
-m-top-app-bar { display: block; position: sticky; top: 0; z-index: 20; }
+m-top-app-bar { display: block; position: sticky; top: 0; z-index: 20; background: transparent; }
 m-tabs { display: block; margin-bottom: 16px; width: 100%; }
 m-text-field { display: block; width: 100%; min-height: 220px; }
 m-button, m-icon-button { vertical-align: middle; }
+.appbar-actions { display: inline-flex; align-items: center; gap: 2px; }
+
+/* Gemini-like ambient washes */
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 0% -10%, color-mix(in srgb, var(--mtrl-sys-color-primary-container) 70%, transparent), transparent 55%),
+    radial-gradient(90% 70% at 100% 0%, color-mix(in srgb, var(--mtrl-sys-color-tertiary-container) 65%, transparent), transparent 50%),
+    radial-gradient(80% 60% at 50% 110%, color-mix(in srgb, var(--mtrl-sys-color-secondary-container) 55%, transparent), transparent 55%),
+    var(--mtrl-sys-color-surface);
+}
+.ambient-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(64px);
+  opacity: 0.55;
+  animation: ambient-drift 18s ease-in-out infinite alternate;
+}
+.ambient-blob.a {
+  width: min(52vw, 520px);
+  height: min(52vw, 520px);
+  left: -8%;
+  top: -12%;
+  background: var(--mtrl-sys-color-primary-container);
+}
+.ambient-blob.b {
+  width: min(48vw, 480px);
+  height: min(48vw, 480px);
+  right: -10%;
+  top: 8%;
+  background: var(--mtrl-sys-color-tertiary-container);
+  animation-delay: -6s;
+  animation-duration: 22s;
+}
+.ambient-blob.c {
+  width: min(56vw, 560px);
+  height: min(56vw, 560px);
+  left: 28%;
+  bottom: -22%;
+  background: var(--mtrl-sys-color-secondary-container);
+  animation-delay: -11s;
+  animation-duration: 26s;
+}
+@keyframes ambient-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(3%, 4%, 0) scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ambient-blob { animation: none; }
+}
 
 * { box-sizing: border-box; }
 
+body {
+  background: transparent !important;
+  min-height: 100vh;
+}
 
+.landing, .container, .topbar, .land-top {
+  position: relative;
+  z-index: 1;
+}
 
-body { /* fonts/colors from material/styles */ }
+.topbar, .land-top {
+  background: color-mix(in srgb, var(--mtrl-sys-color-surface) 55%, transparent) !important;
+  backdrop-filter: blur(18px) saturate(1.2);
+  border-bottom: 1px solid color-mix(in srgb, var(--mtrl-sys-color-outline-variant) 50%, transparent);
+}
+
+.panel, .stat, .mock, .carousel-frame {
+  background: color-mix(in srgb, var(--mtrl-sys-color-surface-container-lowest) 78%, transparent) !important;
+  backdrop-filter: blur(16px) saturate(1.15);
+  border-color: color-mix(in srgb, var(--mtrl-sys-color-outline-variant) 65%, transparent) !important;
+  border-radius: 20px !important;
+}
 
 .material-symbols-outlined {
   font-family: 'Material Symbols Outlined';

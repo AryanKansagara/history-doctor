@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Button, IconButton } from 'material/react'
 import { icon } from './icons.ts'
-import { applyThemeMode, readThemeMode, type ThemeMode } from './themeMode.ts'
+import { AmbientBackground, ThemeControls } from './ThemeChrome.tsx'
 
 export type Slide = { title: string; caption: string; preview: ReactNode }
 export type LandingProps = {
@@ -18,7 +18,6 @@ export type LandingProps = {
 
 export function Landing(props: LandingProps) {
   const { name, tagline, headline, support, audience, features, slides, tryHref = '/app' } = props
-  const [mode, setMode] = useState<ThemeMode>(() => readThemeMode())
   const [i, setI] = useState(0)
 
   useEffect(() => {
@@ -31,14 +30,10 @@ export function Landing(props: LandingProps) {
     history.pushState({}, '', href)
     dispatchEvent(new PopStateEvent('popstate'))
   }
-  const toggle = () => {
-    const next: ThemeMode = mode === 'dark' ? 'light' : 'dark'
-    applyThemeMode(next)
-    setMode(next)
-  }
 
   return (
     <div className="landing">
+      <AmbientBackground />
       <header className="topbar land-top">
         <div className="brand">
           <span className="logo" aria-hidden dangerouslySetInnerHTML={{ __html: icon.monitoring }} />
@@ -49,12 +44,7 @@ export function Landing(props: LandingProps) {
         </div>
         <div className="row">
           <Button variant="outlined" onClick={() => go(tryHref)}>Try this</Button>
-          <IconButton
-            variant="standard"
-            icon={mode === 'dark' ? icon.lightMode : icon.darkMode}
-            aria-label="Toggle theme"
-            onClick={toggle}
-          />
+          <ThemeControls />
         </div>
       </header>
 
