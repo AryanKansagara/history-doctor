@@ -8,7 +8,7 @@ function ProductLanding() {
       name="History Doctor"
       icon="monitoring"
       tagline="Temporal workflow history analyzer"
-      headline="Catch Temporal history limits before they page you"
+      headline="Catch Temporal history limits *before they page you*"
       support="Drop in an Event History export and see size, Actions cost, payload bloat, retries, and how close you are to Continue-As-New."
       audience="For Temporal Cloud and self-hosted teams who ship long-running workflows."
       features={[

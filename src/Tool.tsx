@@ -1,5 +1,6 @@
 import { useDeferredValue, useMemo, useState, type DragEvent, type ReactNode } from 'react'
-import { Button, Checkbox, Tab, Tabs } from 'material/react'
+import { Checkbox, Tab, Tabs } from 'material/react'
+import { Button } from './ui.tsx'
 import { Shell } from './Shell.tsx'
 import { BackToHome } from './router.tsx'
 import { analyze, CATEGORIES, DOCS, fmtBytes, LIMITS, parseHistory, project, type Analysis } from './analyze.ts'
