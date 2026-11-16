@@ -73,6 +73,7 @@ m-button, m-icon-button { vertical-align: middle; }
   align-items: stretch;
 }
 .ingest-side {
+  grid-template-columns: minmax(0, 1fr);
   display: grid;
   gap: 12px;
   align-content: start;
@@ -269,7 +270,8 @@ code, pre, textarea, .mono {
   box-shadow: var(--shadow);
 }
 .grid { display: grid; gap: 16px; }
-.cols-2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.cols-2 { grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
+.cols-2 > * { min-width: 0; }
 
 .stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .stat {

@@ -8,7 +8,7 @@ export default function Docs() {
   return (
     <Shell name="History Doctor" tagline="Temporal workflow history analyzer">
       <BackToHome />
-      <section className="panel">
+      <section className="panel" style={{ overflowWrap: 'anywhere', minWidth: 0 }}>
         <h1>How History Doctor works</h1>
         <p>
           History Doctor parses a Temporal Event History export in your browser and estimates limits, payload bloat, retries and
