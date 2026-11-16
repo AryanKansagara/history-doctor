@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { analyze, b64Bytes, eventTypeName, parseHistory, project } from './analyze.ts'
+import { readFileSync } from 'node:fs'
+import { analyze, b64Bytes, eventTypeName, parseHistory, project, tieredCost } from './analyze.ts'
 import { entitySample, healthySample, retryStormSample } from './samples.ts'
 
 const ev = (id: number, type: string, attrs: object, sec = id) => ({
@@ -94,4 +95,79 @@ test('samples parse and trigger the expected findings', () => {
   assert.ok(charge.unlimitedRetries)
   assert.equal(storm.recs[0].severity, 'bad')
   assert.ok(storm.recs.some(r => r.title === 'Investigate Workflow Task failures'))
+})
+
+// Real histories from the Temporal SDK replay test suites (see /docs for sources and licences).
+const fixture = (f: string) => analyze(parseHistory(readFileSync(new URL(`./fixtures/${f}`, import.meta.url), 'utf8')), f)
+
+test('real TypeScript SDK history: children, timers, and an operator reset', () => {
+  const a = fixture('ts-random-replay-1.17.2.json')
+  assert.equal(a.eventCount, 65)
+  assert.equal(a.status, 'Completed')
+  assert.ok(a.historyBytesReported)
+  const by = Object.fromEntries(a.actions.map(r => [r.kind, r.count]))
+  assert.equal(by['Child workflow started'], 8) // 4 children x 2 Actions
+  assert.equal(by['Timer started'], 4)
+  assert.equal(by['Workflow reset'], 1)
+  assert.equal(a.resets, 1)
+  assert.deepEqual(a.workflowTaskFailures, []) // reset is not a code failure
+  assert.ok(!a.recs.some(r => r.title === 'Investigate Workflow Task failures'))
+  assert.ok(!a.timeline.some(t => t.failed))
+})
+
+test('real Python SDK history: signals before first task, update, activity, timer', () => {
+  const a = fixture('py-signals-timers-updates.json')
+  const by = Object.fromEntries(a.actions.map(r => [r.kind, r.count]))
+  assert.equal(by['Signal received'], 2) // signals at events 3-4 are not Signal-With-Start
+  assert.ok(!('Signal-With-Start' in by))
+  assert.equal(by['Update accepted'], 1)
+  assert.equal(by['Activity started or retried'], 1)
+  assert.equal(by['Timer started'], 1)
+  assert.equal(a.totalActions, 6)
+})
+
+test('real Java SDK history: activity retry read from the attempt number', () => {
+  const a = fixture('java-async-activity-retry.json')
+  assert.equal(a.status, 'Failed')
+  const s = a.activities[0]
+  assert.equal(s.attempts, 2)
+  assert.equal(s.retries, 1)
+  assert.equal(s.failed, 1)
+})
+
+test('real Java SDK history: Nexus operation schedule and cancel are billed', () => {
+  const a = fixture('java-cancel-nexus-operation.json')
+  const by = Object.fromEntries(a.actions.map(r => [r.kind, r.count]))
+  assert.equal(by['Nexus operation scheduled'], 1)
+  assert.equal(by['Nexus cancel requested'], 1)
+})
+
+test('real Python SDK history: in-flight activity is pending, run still open', () => {
+  const a = fixture('py-swallowed-activity-cancellation.json')
+  assert.equal(a.status, 'Running')
+  assert.equal(a.activities[0].pending, 1)
+  assert.equal(a.activities[0].completed, 7)
+})
+
+test('schedule-started workflow bills three Actions', () => {
+  const a = analyze(parseHistory(JSON.stringify([ev(1, 'WorkflowExecutionStarted', { searchAttributes: { indexedFields: { TemporalScheduledById: {} } } })])))
+  assert.equal(a.totalActions, 3)
+})
+
+test('local activity retries come from Workflow Task metering metadata', () => {
+  const a = analyze(parseHistory(JSON.stringify([
+    ev(1, 'WorkflowExecutionStarted', {}),
+    ev(2, 'WorkflowTaskCompleted', { meteringMetadata: { nonfirstLocalActivityExecutionAttempts: 4 } }),
+    ev(3, 'MarkerRecorded', { markerName: 'core_local_activity', workflowTaskCompletedEventId: '2' }),
+  ])))
+  const by = Object.fromEntries(a.actions.map(r => [r.kind, r.count]))
+  assert.equal(by['Local Activity retried'], 4)
+  assert.equal(a.totalActions, 6)
+})
+
+test('graduated pricing matches the worked example on the Temporal pricing page', () => {
+  assert.equal(tieredCost(11_250_000), 525) // 5M x $50 + 5M x $45 + 1.25M x $40
+  assert.equal(tieredCost(0), 0)
+  assert.equal(tieredCost(1_000_000), 50)
+  assert.equal(tieredCost(250_000_000), 250 + 225 + 400 + 1050 + 1500 + 2500 + 50 * 25)
 })

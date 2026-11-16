@@ -3,8 +3,17 @@ import { Checkbox, Tab, Tabs } from 'material/react'
 import { Button } from './ui.tsx'
 import { Shell } from './Shell.tsx'
 import { BackToHome } from './router.tsx'
-import { analyze, CATEGORIES, DOCS, fmtBytes, LIMITS, parseHistory, project, type Analysis } from './analyze.ts'
-import { SAMPLES } from './samples.ts'
+import { analyze, CATEGORIES, DOCS, fmtBytes, LIMITS, parseHistory, project, PRICE_TIERS, tieredCost, type Analysis } from './analyze.ts'
+import { SAMPLES as SYNTHETIC } from './samples.ts'
+import realTs from './fixtures/ts-random-replay-1.17.2.json?raw'
+import realPy from './fixtures/py-signals-timers-updates.json?raw'
+
+// Two genuine histories from the Temporal SDK replay test suites (MIT), credited on /docs.
+const SAMPLES = [
+  ...SYNTHETIC,
+  { id: 'real-ts', label: 'Real: TypeScript SDK test run', file: 'ts-random-replay-1.17.2.json', make: () => realTs },
+  { id: 'real-py', label: 'Real: Python SDK test run', file: 'py-signals-timers-updates.json', make: () => realPy },
+]
 
 const LIST_PRICE = 50 // USD per million Actions, Temporal Cloud pay-as-you-go list price
 const TABS = ['Recommendations', 'Actions & cost', 'Payloads', 'Limits', 'Retries & failures', 'Timeline'] as const
@@ -312,7 +321,9 @@ function Cost({ a, price, setPrice, perDay, setPerDay, withHeartbeats, setWithHe
         <Stat label="Actions per run" value={num(total)} />
         <Stat label="Cost per run" value={money(perRun)} />
         <Stat label="Cost per 1,000 runs" value={money(perRun * 1000)} />
-        <Stat label={`Monthly at ${num(perDay)}/day`} value={money(perRun * perDay * 30)} sub="30-day month, Actions only" />
+        <Stat label={`Monthly at ${num(perDay)}/day`} value={money(perRun * perDay * 30)} sub={`flat $${price}/M, 30-day month, Actions only`} />
+        <Stat label="Monthly with volume tiers" value={money(tieredCost(total * perDay * 30))}
+          sub={`Business+ graduated tiers, $${PRICE_TIERS[0][1]} down to $${PRICE_TIERS[PRICE_TIERS.length - 1][1]} per M`} />
       </div>
       <div className="grid cols-2">
         <div>
@@ -487,6 +498,7 @@ function Retries({ a }: { a: Analysis }) {
         ))}</tbody>
       </table></div> : <p className="muted">No activities in this history.</p>}
       <h3 style={{ marginTop: 18 }}>Workflow Task failures</h3>
+      {a.resets > 0 && <p className="muted">This run was reset {a.resets} time(s) by an operator (cause RESET_WORKFLOW). A reset is billed as one Action and is not counted as a failure.</p>}
       {a.workflowTaskFailures.length
         ? a.workflowTaskFailures.map(f => <div key={f.cause} className="finding bad"><strong className="mono">{f.cause}</strong> × {f.count}</div>)
         : <p className="muted">None.</p>}

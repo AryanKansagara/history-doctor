@@ -53,7 +53,7 @@ export interface Analysis {
   actions: ActionRow[]; totalActions: number; heartbeatEstimate: number
   activities: ActivityStats[]
   signals: { name: string; count: number; bytes: number }[]
-  timers: number; workflowTaskFailures: { cause: string; count: number }[]
+  timers: number; resets: number; workflowTaskFailures: { cause: string; count: number }[]
   suggestContinueAsNew: boolean
   timeline: { time: number; cat: Category; failed: boolean }[]
   recs: Rec[]
@@ -191,14 +191,15 @@ export function analyze(events: Ev[], name = 'history'): Analysis {
   const counts: Record<string, number> = {}
   const bump = (k: string, n = 1) => { counts[k] = (counts[k] ?? 0) + n }
   const payloads: Payload[] = []
-  let timers = 0, suggestCAN = false, reported = 0, reportedAt = 0, sws = false
+  let resets = 0, timers = 0, suggestCAN = false, reported = 0, reportedAt = 0, sws = false
 
   for (const e of events) {
     const a = e.attrs
     switch (e.type) {
       case 'WorkflowExecutionStarted':
         if (!isChild) bump('Workflow started')
-        if (scheduled) bump('Schedule execution')
+        // Each Schedule execution is three Actions: two for the Schedule start plus the Workflow start.
+        if (scheduled) bump('Schedule execution', 2)
         break
       case 'ActivityTaskScheduled': {
         const s = act(a.activityType?.name ?? 'unknown')
@@ -271,8 +272,16 @@ export function analyze(events: Ev[], name = 'history'): Analysis {
         if (a.suggestContinueAsNew) suggestCAN = true
         if (Number(a.historySizeBytes) > 0) { reported = Number(a.historySizeBytes); reportedAt = e.id }
         break
+      case 'WorkflowTaskCompleted': {
+        // Local Activity retries are metered on the completing Workflow Task.
+        const n = Number(a.meteringMetadata?.nonfirstLocalActivityExecutionAttempts ?? 0)
+        if (n > 0) bump('Local Activity retried', n)
+        break
+      }
       case 'WorkflowTaskFailed': case 'WorkflowTaskTimedOut': {
         const c = String(a.cause ?? (e.type === 'WorkflowTaskTimedOut' ? 'TIMED_OUT' : 'UNSPECIFIED')).replace('WORKFLOW_TASK_FAILED_CAUSE_', '')
+        // A reset is an operator action recorded as a failed Workflow Task, billed as one Action; not a code failure.
+        if (c === 'RESET_WORKFLOW') { bump('Workflow reset'); resets++; break }
         wtfCauses.set(c, (wtfCauses.get(c) ?? 0) + 1)
         break
       }
@@ -302,7 +311,9 @@ export function analyze(events: Ev[], name = 'history'): Analysis {
 
   const NOTES: Record<string, string> = {
     'Workflow started': 'Includes runs started by Continue-As-New.',
-    'Schedule execution': 'Each Schedule execution adds two Actions beyond the Workflow start.',
+    'Schedule execution': 'Each Schedule execution is three Actions: two for the Schedule start plus the Workflow start.',
+    'Local Activity retried': 'From meteringMetadata.nonfirstLocalActivityExecutionAttempts on Workflow Task completions.',
+    'Workflow reset': 'Recorded as a Workflow Task failure with cause RESET_WORKFLOW.',
     'Activity started or retried': 'Every attempt counts, taken from the attempt number of each started event.',
     'Timer started': 'Includes timers the SDK starts implicitly (e.g. sleep, condition timeouts).',
     'Signal received': '',
@@ -344,10 +355,10 @@ export function analyze(events: Ev[], name = 'history'): Analysis {
     payloadSources: [...groups.values()].sort((x, y) => y.bytes - x.bytes),
     actions, totalActions, heartbeatEstimate, activities,
     signals: [...signals.values()].sort((x, y) => y.count - x.count),
-    timers,
+    timers, resets,
     workflowTaskFailures: [...wtfCauses].map(([cause, count]) => ({ cause, count })),
     suggestContinueAsNew: suggestCAN,
-    timeline: events.map(e => ({ time: e.time, cat: category(e.type), failed: /Failed|TimedOut|Terminated/.test(e.type) })),
+    timeline: events.map(e => ({ time: e.time, cat: category(e.type), failed: /Failed|TimedOut|Terminated/.test(e.type) && !/RESET_WORKFLOW/.test(String(e.attrs.cause)) })),
     recs: [],
   }
   out.recs = recommend(out)
@@ -399,6 +410,24 @@ export function project(a: Analysis): Projection | null {
       bytesMax: t(a.historyBytes, LIMITS.bytesMax, bytesPerDay),
     },
   }
+}
+
+// ---------- pricing ----------
+
+/** Temporal Cloud Business/Enterprise/Mission Critical monthly Action tiers (USD per million), docs.temporal.io/cloud/pricing, checked 2026-11-16. */
+export const PRICE_TIERS: [upToMillions: number, usdPerMillion: number][] = [
+  [5, 50], [10, 45], [20, 40], [50, 35], [100, 30], [200, 25],
+]
+
+/** Monthly cost of `actions` under the graduated tiers. Volume over 200M is contract-priced; the last tier rate is used. */
+export function tieredCost(actions: number): number {
+  let left = Math.max(0, actions) / 1e6, prev = 0, cost = 0
+  for (const [upTo, rate] of PRICE_TIERS) {
+    const n = Math.min(left, upTo - prev)
+    cost += n * rate; left -= n; prev = upTo
+    if (left <= 0) return cost
+  }
+  return cost + left * PRICE_TIERS[PRICE_TIERS.length - 1][1]
 }
 
 // ---------- recommendations ----------
