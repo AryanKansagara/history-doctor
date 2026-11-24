@@ -27,3 +27,21 @@ Tests run against real Event Histories from the Temporal SDK replay suites: `tem
 ```bash
 npm test
 ```
+
+### End-to-end tests
+
+Playwright (Chromium) drives the production build served by `vite preview`:
+
+```bash
+npx playwright install chromium   # once
+npm run test:e2e                  # builds, starts vite preview, runs e2e/
+E2E_PORT=4500 npm run test:e2e    # use another port (default 4173; the run fails if it is taken)
+```
+
+The tests block all network access except the preview server, so nothing reaches Supabase, analytics or the web fonts, and they fail on uncaught page errors or on any new external host.
+Cases marked `test.fail` in `e2e/partial.spec.ts` document known app bugs (linked in the file); they flip to failures once the bug is fixed and then need the `.fail` removed.
+
+### CI and deployments
+
+`.github/workflows/ci.yml` runs on pull requests and pushes to `main` (job `test`): `npm ci`, build, unit tests, E2E.
+`vercel.json` limits Git deployments to `main`, so pull request branches get no Vercel preview and GitHub CI is the gate.
