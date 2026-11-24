@@ -1,11 +1,11 @@
 import { expect, test, fixtureJson, HEALTHY_VERDICT, stat, upload } from './support.ts'
 
-// A history that is visibly incomplete must never get the healthy "No issues found / comfortably within limits"
-// verdict. The app does not do this yet: https://github.com/AryanKansagara/history-doctor/issues/2
-// https://github.com/AryanKansagara/history-doctor/issues/3 covers non-Temporal JSON.
-// Those cases are declared with test.fail(): they pass while the bug exists and start failing the moment it is fixed,
-// at which point the `.fail` must be turned into a normal `test`. The control test below proves the page objects used
-// here are right, so an expected failure cannot hide behind a broken selector.
+// Incomplete histories (https://github.com/AryanKansagara/history-doctor/issues/2) must never get the healthy
+// "No issues found / comfortably within limits" verdict, and non-Temporal JSON
+// (https://github.com/AryanKansagara/history-doctor/issues/3) must be rejected rather than analysed.
+// A known app bug is declared with test.fail(): it passes while the bug exists and starts failing the moment it is
+// fixed, at which point the `.fail` must be turned into a normal `test`. The control test below proves the page
+// objects used here are right, so an expected failure cannot hide behind a broken selector.
 
 const real = fixtureJson('py-signals-timers-updates.json') // 23 events, ids 1-23, started ... completed
 type Events = Record<string, unknown>[]
@@ -41,8 +41,9 @@ for (const c of PARTIAL) {
   })
 }
 
-test.fail('non-Temporal events (eventType + eventTime only) are not declared healthy', async ({ page }) => {
+test('non-Temporal events (eventType + eventTime only) are not declared healthy', async ({ page }) => {
   await upload(page, { name: 'clicks.json', text: '[{"eventType":"click","eventTime":"2026-01-01T00:00:00Z"},{"eventType":"scroll","eventTime":"2026-01-01T00:00:05Z"}]' })
-  await expect(page.locator('.finding.bad, .stat').first()).toBeVisible()
+  await expect(page.locator('.finding.bad')).toContainText('does not look like a Temporal Event History')
+  await expect(page.locator('.stat')).toHaveCount(0)
   await expect(page.getByText(HEALTHY_VERDICT)).toHaveCount(0)
 })
