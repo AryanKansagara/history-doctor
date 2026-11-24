@@ -3,7 +3,7 @@ import { Checkbox, Tab, Tabs } from 'material/react'
 import { Button } from './ui.tsx'
 import { Shell } from './Shell.tsx'
 import { BackToHome } from './router.tsx'
-import { analyze, CATEGORIES, DOCS, fmtBytes, LIMITS, parseHistory, project, PRICE_TIERS, tieredCost, type Analysis } from './analyze.ts'
+import { analyze, CATEGORIES, DOCS, fmtBytes, LIMITS, NO_ISSUES, NO_ISSUES_SO_FAR, parseHistory, project, PRICE_TIERS, tieredCost, type Analysis } from './analyze.ts'
 import { SAMPLES as SYNTHETIC } from './samples.ts'
 import realTs from './fixtures/ts-random-replay-1.17.2.json?raw'
 import realPy from './fixtures/py-signals-timers-updates.json?raw'
@@ -37,6 +37,10 @@ function dur(ms: number) {
 const level = (v: number, warn: number, max: number) => (v >= max * 0.9 ? 'bad' : v >= warn ? 'warn' : 'good')
 const statusBadge = (s: string) => s === 'Completed' ? 'good' : s === 'Running' || s === 'Continued-As-New' ? 'info' : 'bad'
 const sevLabel = { bad: 'High', warn: 'Medium', info: 'Low' }
+/** Events are missing, so counts and cost can only be given as a lower bound. */
+const isPartial = (a: Analysis) => a.completeness.state === 'partial'
+/** `v`, prefixed with ≥ (kept on one line with the figure) when events are missing. */
+const atLeast = (a: Analysis, v: string): ReactNode => (isPartial(a) ? <span style={{ whiteSpace: 'nowrap' }}><span style={{ fontSize: '0.7em' }}>≥</span> {v}</span> : v)
 let nextId = 1
 
 export default function Tool() {
@@ -167,7 +171,7 @@ export default function Tool() {
                   key={t}
                   value={t}
                   label={t}
-                  badge={t === 'Recommendations' ? String(a.recs.filter(r => r.title !== 'No issues found').length) : undefined}
+                  badge={t === 'Recommendations' ? String(a.recs.filter(r => r.title !== NO_ISSUES && r.title !== NO_ISSUES_SO_FAR).length) : undefined}
                 />
               ))}
             </Tabs>
@@ -212,13 +216,13 @@ function Compare({ list, current, onSelect, price, perDay, actionsOf }: {
               <tr key={i} className={`clickable ${a === current ? 'selected' : ''}`} onClick={() => onSelect(a)}>
                 <td className="ellipsis" title={a.name}>{a.name}</td>
                 <td>{a.workflowType}</td>
-                <td><span className={`badge ${statusBadge(a.status)}`}>{a.status}</span></td>
+                <td><span className={`badge ${statusBadge(a.status)}`}>{a.status}</span>{isPartial(a) && <> <span className="badge warn">Partial</span></>}</td>
                 <td className="num">{num(a.eventCount)}</td>
                 <td className="num">{fmtBytes(a.historyBytes)}</td>
                 <td className="num">{a.payloads[0] ? fmtBytes(a.payloads[0].bytes) : '—'}</td>
                 <td className="num">{num(a.activities.reduce((n, s) => n + s.retries, 0))}</td>
-                <td className="num">{num(actionsOf(a))}</td>
-                <td className="num">{money(monthly(a))}</td>
+                <td className="num">{atLeast(a, num(actionsOf(a)))}</td>
+                <td className="num">{atLeast(a, money(monthly(a)))}</td>
                 <td><span className={`badge ${a.recs[0].severity}`}>{a.recs[0].title}</span></td>
               </tr>
             ))}
@@ -229,8 +233,8 @@ function Compare({ list, current, onSelect, price, perDay, actionsOf }: {
             <td className="num">{fmtBytes(sum(a => a.historyBytes))}</td>
             <td />
             <td className="num">{num(sum(a => a.activities.reduce((n, s) => n + s.retries, 0)))}</td>
-            <td className="num">{num(sum(actionsOf))}</td>
-            <td className="num">{money(sum(monthly))}</td>
+            <td className="num">{list.some(isPartial) ? <span style={{ whiteSpace: 'nowrap' }}>≥ {num(sum(actionsOf))}</span> : num(sum(actionsOf))}</td>
+            <td className="num">{list.some(isPartial) ? <span style={{ whiteSpace: 'nowrap' }}>≥ {money(sum(monthly))}</span> : money(sum(monthly))}</td>
             <td />
           </tr></tfoot>
         </table>
@@ -255,17 +259,26 @@ function Stat({ label, value, sub, children }: { label: string; value: ReactNode
 
 function Overview({ a, price, actions }: { a: Analysis; price: number; actions: number }) {
   const largest = a.payloads[0]
+  const partial = isPartial(a)
+  const open = a.completeness.state === 'running'
   return (
     <section>
       <div className="head-row">
         <h2 style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           {a.workflowType} <span className={`badge ${statusBadge(a.status)}`}>{a.status}</span>
+          {partial && <span className="badge warn">Partial history</span>}
         </h2>
         <span className="muted mono" style={{ fontSize: 12.5 }}>{[a.workflowId, a.taskQueue && `queue: ${a.taskQueue}`, a.name].filter(Boolean).join(' · ')}</span>
       </div>
+      {partial && (
+        <div className="finding warn partial-note" role="status">
+          <p><strong>Partial history: events are missing.</strong> {a.completeness.reasons.join(' ')}</p>
+          <p>The counts, Actions and cost below cover only the events provided and are lower bounds.</p>
+        </div>
+      )}
       <div className="stats">
         <Stat label={a.status === 'Running' ? 'Running for (observed)' : 'Run duration'} value={dur(a.durationMs)} sub={`${new Date(a.start).toLocaleString()}`} />
-        <Stat label="Events" value={num(a.eventCount)} sub={`${pct((a.eventCount / LIMITS.eventsMax) * 100)} of hard limit`}>
+        <Stat label="Events" value={num(a.eventCount)} sub={`${pct((a.eventCount / LIMITS.eventsMax) * 100)} of hard limit${partial ? ' · incomplete' : ''}`}>
           <LimitBar value={a.eventCount} warn={LIMITS.eventsWarn} max={LIMITS.eventsMax} fmt={n => (n >= 1000 ? `${(n / 1000).toFixed(n % 1000 ? 1 : 0)}K` : String(n))} />
         </Stat>
         <Stat label={a.historyBytesReported ? 'History size (server-reported)' : 'History size (JSON upper bound)'} value={fmtBytes(a.historyBytes)}
@@ -275,8 +288,10 @@ function Overview({ a, price, actions }: { a: Analysis; price: number; actions: 
         <Stat label="Payload bytes (decoded)" value={fmtBytes(a.payloadBytes)} sub={`${num(a.payloadCount)} payloads · largest ${largest ? fmtBytes(largest.bytes) : '—'}`}>
           {largest && <LimitBar value={largest.bytes} warn={LIMITS.payloadMax / 2} max={LIMITS.payloadMax} fmt={n => `${(n / 1024 / 1024).toFixed(0)} MB`} />}
         </Stat>
-        <Stat label="Billable Actions (est.)" value={num(actions)} sub={a.heartbeatEstimate ? `+ up to ${num(a.heartbeatEstimate)} heartbeats not in history` : 'from events in history'} />
-        <Stat label="Cost of this run" value={money((actions / 1e6) * price)} sub={`at $${price} per million Actions`} />
+        <Stat label={partial ? 'Billable Actions (lower bound)' : 'Billable Actions (est.)'} value={atLeast(a, num(actions))}
+          sub={partial ? 'events are missing from this history' : a.heartbeatEstimate ? `+ up to ${num(a.heartbeatEstimate)} heartbeats not in history` : open ? 'from events so far' : 'from events in history'} />
+        <Stat label={partial ? 'Cost (lower bound)' : open ? 'Cost so far' : 'Cost of this run'} value={atLeast(a, money((actions / 1e6) * price))}
+          sub={`at $${price} per million Actions${partial ? ' · events missing' : open ? ' · run still open' : ''}`} />
       </div>
     </section>
   )
@@ -304,6 +319,7 @@ function Cost({ a, price, setPrice, perDay, setPerDay, withHeartbeats, setWithHe
   const rows = [...a.actions, ...(withHeartbeats && a.heartbeatEstimate ? [{ kind: 'Activity heartbeats (estimated)', count: a.heartbeatEstimate, note: 'Upper bound: every throttle window (min(80% of heartbeat timeout, 60s)) of the final attempt.' }] : [])]
     .sort((x, y) => y.count - x.count)
   const perRun = (total / 1e6) * price
+  const bound = isPartial(a) ? ' (lower bound)' : ''
   const actByType = a.activities.map(s => ({ type: s.type, n: s.attempts + (withHeartbeats ? s.heartbeatEstimate : 0), s })).filter(x => x.n).sort((x, y) => y.n - x.n)
   return (
     <div>
@@ -314,15 +330,15 @@ function Cost({ a, price, setPrice, perDay, setPerDay, withHeartbeats, setWithHe
         </label>
         <label>Executions per day like this one
           <input type="number" min={0} step={100} value={perDay} onChange={e => setPerDay(Math.max(0, +e.target.value))} />
-          <span>At {num(perDay)}/day: <strong style={{ color: 'var(--text)' }}>{money(perRun * perDay * 30)}/month</strong> ({num(total * perDay * 30)} Actions)</span>
+          <span>At {num(perDay)}/day: <strong style={{ color: 'var(--text)' }}>{atLeast(a, money(perRun * perDay * 30))}/month</strong> ({atLeast(a, num(total * perDay * 30))} Actions)</span>
         </label>
       </div>
       <div className="stats" style={{ marginBottom: 16 }}>
-        <Stat label="Actions per run" value={num(total)} />
-        <Stat label="Cost per run" value={money(perRun)} />
-        <Stat label="Cost per 1,000 runs" value={money(perRun * 1000)} />
-        <Stat label={`Monthly at ${num(perDay)}/day`} value={money(perRun * perDay * 30)} sub={`flat $${price}/M, 30-day month, Actions only`} />
-        <Stat label="Monthly with volume tiers" value={money(tieredCost(total * perDay * 30))}
+        <Stat label={`Actions per run${bound}`} value={atLeast(a, num(total))} />
+        <Stat label={`Cost per run${bound}`} value={atLeast(a, money(perRun))} />
+        <Stat label={`Cost per 1,000 runs${bound}`} value={atLeast(a, money(perRun * 1000))} />
+        <Stat label={`Monthly at ${num(perDay)}/day${bound}`} value={atLeast(a, money(perRun * perDay * 30))} sub={`flat $${price}/M, 30-day month, Actions only`} />
+        <Stat label={`Monthly with volume tiers${bound}`} value={atLeast(a, money(tieredCost(total * perDay * 30)))}
           sub={`Business+ graduated tiers, $${PRICE_TIERS[0][1]} down to $${PRICE_TIERS[PRICE_TIERS.length - 1][1]} per M`} />
       </div>
       <div className="grid cols-2">
@@ -452,7 +468,9 @@ function Limits({ a }: { a: Analysis }) {
           <thead><tr><th>Threshold</th><th className="num">Now</th><th className="num">Threshold</th><th>Time to reach</th></tr></thead>
           <tbody>{rows.map(r => <tr key={r[0]}><td>{r[0]}</td><td className="num">{r[1]}</td><td className="num">{r[2]}</td><td>{r[3]}</td></tr>)}</tbody>
         </table></div>
-      </> : <p className="muted">The run spans too little wall-clock time to extrapolate growth.</p>}
+      </> : <p className="muted">{isPartial(a)
+        ? 'Growth is not extrapolated: events are missing from this history, so the event count, size and time span do not describe the whole run.'
+        : 'The run spans too little wall-clock time to extrapolate growth.'}</p>}
       <h3 style={{ marginTop: 18 }}>Other per-execution limits</h3>
       <div className="table-wrap"><table>
         <thead><tr><th>Limit</th><th className="num">This run</th><th className="num">Limit</th></tr></thead>
