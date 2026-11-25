@@ -27,7 +27,7 @@ export const DOCS = {
   events: 'https://docs.temporal.io/workflow-execution/event',
 }
 
-export interface Ev { id: number; type: string; time: number; attrs: Obj; bytes: number }
+export interface Ev { id: number; type: string; time: number; attrs: Obj; bytes: number; rawType?: string }
 
 export type Category = 'Workflow' | 'Workflow task' | 'Activity' | 'Timer' | 'Signals & updates' | 'Child & Nexus' | 'Other'
 export const CATEGORIES: Category[] = ['Workflow', 'Workflow task', 'Activity', 'Timer', 'Signals & updates', 'Child & Nexus', 'Other']
@@ -76,6 +76,37 @@ export function eventTypeName(t: unknown): string {
   return t[0].toUpperCase() + t.slice(1)
 }
 
+/**
+ * Every Temporal EventType except EVENT_TYPE_UNSPECIFIED, from the public API protos
+ * (temporalio/api, temporal/api/enums/v1/event_type.proto, checked 2026-11-24).
+ * Temporal adds event types over time; a type missing here is not an error (see parseEvents), this list only
+ * tells a Temporal history apart from other JSON that happens to have `eventType` and `eventTime` fields.
+ */
+const KNOWN_EVENT_TYPES = new Set([
+  'WORKFLOW_EXECUTION_STARTED', 'WORKFLOW_EXECUTION_COMPLETED', 'WORKFLOW_EXECUTION_FAILED', 'WORKFLOW_EXECUTION_TIMED_OUT',
+  'WORKFLOW_TASK_SCHEDULED', 'WORKFLOW_TASK_STARTED', 'WORKFLOW_TASK_COMPLETED', 'WORKFLOW_TASK_TIMED_OUT', 'WORKFLOW_TASK_FAILED',
+  'ACTIVITY_TASK_SCHEDULED', 'ACTIVITY_TASK_STARTED', 'ACTIVITY_TASK_COMPLETED', 'ACTIVITY_TASK_FAILED', 'ACTIVITY_TASK_TIMED_OUT',
+  'ACTIVITY_TASK_CANCEL_REQUESTED', 'ACTIVITY_TASK_CANCELED', 'TIMER_STARTED', 'TIMER_FIRED', 'TIMER_CANCELED',
+  'WORKFLOW_EXECUTION_CANCEL_REQUESTED', 'WORKFLOW_EXECUTION_CANCELED',
+  'REQUEST_CANCEL_EXTERNAL_WORKFLOW_EXECUTION_INITIATED', 'REQUEST_CANCEL_EXTERNAL_WORKFLOW_EXECUTION_FAILED',
+  'EXTERNAL_WORKFLOW_EXECUTION_CANCEL_REQUESTED', 'MARKER_RECORDED', 'WORKFLOW_EXECUTION_SIGNALED', 'WORKFLOW_EXECUTION_TERMINATED',
+  'WORKFLOW_EXECUTION_CONTINUED_AS_NEW', 'START_CHILD_WORKFLOW_EXECUTION_INITIATED', 'START_CHILD_WORKFLOW_EXECUTION_FAILED',
+  'CHILD_WORKFLOW_EXECUTION_STARTED', 'CHILD_WORKFLOW_EXECUTION_COMPLETED', 'CHILD_WORKFLOW_EXECUTION_FAILED',
+  'CHILD_WORKFLOW_EXECUTION_CANCELED', 'CHILD_WORKFLOW_EXECUTION_TIMED_OUT', 'CHILD_WORKFLOW_EXECUTION_TERMINATED',
+  'SIGNAL_EXTERNAL_WORKFLOW_EXECUTION_INITIATED', 'SIGNAL_EXTERNAL_WORKFLOW_EXECUTION_FAILED', 'EXTERNAL_WORKFLOW_EXECUTION_SIGNALED',
+  'UPSERT_WORKFLOW_SEARCH_ATTRIBUTES', 'WORKFLOW_EXECUTION_UPDATE_ADMITTED', 'WORKFLOW_EXECUTION_UPDATE_ACCEPTED',
+  'WORKFLOW_EXECUTION_UPDATE_REJECTED', 'WORKFLOW_EXECUTION_UPDATE_COMPLETED', 'WORKFLOW_PROPERTIES_MODIFIED_EXTERNALLY',
+  'ACTIVITY_PROPERTIES_MODIFIED_EXTERNALLY', 'WORKFLOW_PROPERTIES_MODIFIED',
+  'NEXUS_OPERATION_SCHEDULED', 'NEXUS_OPERATION_STARTED', 'NEXUS_OPERATION_COMPLETED', 'NEXUS_OPERATION_FAILED',
+  'NEXUS_OPERATION_CANCELED', 'NEXUS_OPERATION_TIMED_OUT', 'NEXUS_OPERATION_CANCEL_REQUESTED', 'WORKFLOW_EXECUTION_OPTIONS_UPDATED',
+  'NEXUS_OPERATION_CANCEL_REQUEST_COMPLETED', 'NEXUS_OPERATION_CANCEL_REQUEST_FAILED',
+  'WORKFLOW_EXECUTION_PAUSED', 'WORKFLOW_EXECUTION_UNPAUSED', 'WORKFLOW_EXECUTION_TIME_SKIPPING_TRANSITIONED',
+].map(n => eventTypeName('EVENT_TYPE_' + n)))
+
+export const isKnownEventType = (name: string) => KNOWN_EVENT_TYPES.has(name)
+
+const NOT_TEMPORAL = 'This does not look like a Temporal Event History:'
+
 function toMs(t: unknown): number {
   if (typeof t === 'string') return Date.parse(t)
   if (t && typeof t === 'object' && 'seconds' in t) return Number((t as Obj).seconds) * 1000 + Number((t as Obj).nanos ?? 0) / 1e6
@@ -89,7 +120,21 @@ export function durS(d: unknown): number {
   return 0
 }
 
+/**
+ * Parse an exported history. Rejects JSON that is not a Temporal Event History (for example analytics events that
+ * merely have `eventType` and `eventTime`). A type this list does not know yet is not a reason to refuse a history
+ * that is otherwise recognisable: newer servers add event types.
+ */
 export function parseHistory(text: string): Ev[] {
+  const events = parseEvents(text)
+  if (!events.some(e => isKnownEventType(e.type))) {
+    const seen = [...new Set(events.map(e => e.rawType ?? e.type))]
+    throw new Error(`${NOT_TEMPORAL} none of its ${events.length.toLocaleString()} event(s) has a Temporal event type (found ${seen.slice(0, 3).map(t => `"${t}"`).join(', ')}${seen.length > 3 ? ', ...' : ''}). Expected types such as WorkflowExecutionStarted or EVENT_TYPE_WORKFLOW_EXECUTION_STARTED.`)
+  }
+  return events
+}
+
+function parseEvents(text: string): Ev[] {
   if (!text.trim()) throw new Error('Input is empty.')
   let root: unknown
   try {
@@ -112,7 +157,11 @@ export function parseHistory(text: string): Ev[] {
     const key = Object.keys(e).find(k => k.endsWith('EventAttributes') && e[k] && typeof e[k] === 'object')
     const time = toMs(e.eventTime)
     if (Number.isNaN(time)) throw new Error(`Event ${e.eventId ?? i + 1} (${type}) has no valid "eventTime".`)
-    return { id: Number(e.eventId ?? i + 1), type, time, attrs: (key ? e[key] : e.attributes) ?? {}, bytes: JSON.stringify(e).length }
+    // An event type this app does not know is accepted only if it still looks like a Temporal event: the proto enum
+    // name, or an attributes object. Anything else is not from a Temporal history.
+    if (!isKnownEventType(type) && !/^EVENT_TYPE_[A-Z0-9_]+$/.test(e.eventType) && !key && !(e.attributes && typeof e.attributes === 'object'))
+      throw new Error(`${NOT_TEMPORAL} event #${i + 1} has type "${e.eventType}", which is not a Temporal event type.`)
+    return { id: Number(e.eventId ?? i + 1), type, time, attrs: (key ? e[key] : e.attributes) ?? {}, bytes: JSON.stringify(e).length, rawType: e.eventType }
   })
   // GetWorkflowExecutionHistory returns long histories one page at a time; a token means more events exist.
   const token = Array.isArray(root) ? undefined : r?.nextPageToken ?? r?.next_page_token

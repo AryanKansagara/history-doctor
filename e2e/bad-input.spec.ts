@@ -22,6 +22,10 @@ const BAD: { name: string; text: string; message: RegExp }[] = [
   { name: 'empty events', text: '{"events":[]}', message: /History contains no events/ },
   { name: 'array of numbers', text: '[1,2,3]', message: /Event #1 is not an object/ },
   { name: 'event without eventType', text: '{"events":[{"eventId":"1"}]}', message: /eventType/ },
+  { name: 'analytics events with eventType and eventTime', text: '[{"eventType":"click","eventTime":"2026-01-01T00:00:00Z"},{"eventType":"scroll","eventTime":"2026-01-01T00:00:05Z"}]', message: /does not look like a Temporal Event History.*event #1 has type "click"/ },
+  { name: 'analytics events wrapped in {"events": [...]}', text: '{"events":[{"eventType":"purchase","eventTime":"2026-01-01T00:00:00Z"}]}', message: /does not look like a Temporal Event History/ },
+  { name: 'an event type that is not in Temporal\'s EventType enum', text: '{"events":[{"eventId":"1","eventType":"EVENT_TYPE_FOO","eventTime":"2026-01-01T00:00:00Z"}]}', message: /does not look like a Temporal Event History.*"EVENT_TYPE_FOO"/ },
+  { name: 'a Temporal history with a foreign event in it', text: JSON.stringify({ events: [...fixtureJson('py-signals-timers-updates.json').events.slice(0, 3), { eventId: '4', eventType: 'click', eventTime: '2026-01-01T00:00:00Z' }] }), message: /does not look like a Temporal Event History.*event #4 has type "click"/ },
   { name: 'event without a valid time', text: '{"events":[{"eventId":"1","eventType":"EVENT_TYPE_WORKFLOW_EXECUTION_STARTED","eventTime":"yesterday"}]}', message: /eventTime/ },
 ]
 
@@ -58,4 +62,15 @@ test('a bad file next to a good one reports the bad one and still analyses the g
   await expect(page.locator('.finding.bad')).toContainText('broken.json:')
   await expect(stat(page, 'Events')).toContainText('23')
   await expect(page.getByRole('heading', { name: /Comparing/ })).toHaveCount(0) // only one analysable history
+})
+
+test('an event type newer than this tool knows does not stop a recognisable history from being analysed', async ({ page }) => {
+  const events = fixtureJson('py-signals-timers-updates.json').events
+  const future = { eventId: '23', eventType: 'EVENT_TYPE_WORKFLOW_EXECUTION_FUTURE_THING', eventTime: events[21].eventTime, workflowExecutionFutureThingEventAttributes: { reason: 'x' } }
+  // Just before the closing event, which stays last.
+  await upload(page, { name: 'future.json', text: JSON.stringify({ events: [...events.slice(0, 22), future, { ...events[22], eventId: '24' }] }) })
+  await expect(page.locator('.finding.bad')).toHaveCount(0)
+  await expect(stat(page, 'Events')).toContainText('24')
+  await expect(stat(page, 'Billable Actions')).toContainText('6') // the future event adds nothing the tool can count
+  await expect(page.getByRole('heading', { level: 2 })).toContainText('Completed')
 })

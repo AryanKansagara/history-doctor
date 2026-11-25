@@ -96,7 +96,7 @@ for (const c of RUNNING) {
   })
 }
 
-test.fail('non-Temporal events (eventType + eventTime only) are not declared healthy', async ({ page }) => {
+test('non-Temporal events (eventType + eventTime only) are not declared healthy', async ({ page }) => {
   await upload(page, { name: 'clicks.json', text: '[{"eventType":"click","eventTime":"2026-01-01T00:00:00Z"},{"eventType":"scroll","eventTime":"2026-01-01T00:00:05Z"}]' })
   await expect(page.locator('.finding.bad')).toContainText('does not look like a Temporal Event History')
   await expect(page.locator('.stat')).toHaveCount(0)
