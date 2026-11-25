@@ -40,6 +40,14 @@ export interface ActivityStats {
   medianMs: number | null; heartbeatTimeoutS: number; heartbeatEstimate: number
   workflowTasks: number; unlimitedRetries: boolean; lastFailure: string; retryFailure: string; timeoutTypes: string[]
 }
+/**
+ * Whether the events provided are the whole history so far.
+ * - `complete`: contiguous from event 1 (WorkflowExecutionStarted) to a closing event.
+ * - `running`: contiguous from event 1 with no closing event and no further page. A live workflow looks exactly like
+ *   this, so it is incomplete only because it is still running: nothing is missing, but figures will grow.
+ * - `partial`: events are missing (further pages, leading events, or gaps), or that cannot be ruled out.
+ */
+export interface Completeness { state: 'complete' | 'running' | 'partial'; reasons: string[] }
 export interface Rec { severity: 'bad' | 'warn' | 'info'; title: string; detail: string; doc: string; docLabel: string }
 
 export interface Analysis {
@@ -55,6 +63,7 @@ export interface Analysis {
   signals: { name: string; count: number; bytes: number }[]
   timers: number; resets: number; workflowTaskFailures: { cause: string; count: number }[]
   suggestContinueAsNew: boolean
+  completeness: Completeness
   timeline: { time: number; cat: Category; failed: boolean }[]
   recs: Rec[]
 }
@@ -141,7 +150,7 @@ function parseEvents(text: string): Ev[] {
   const raw: unknown = Array.isArray(root) ? root : r?.eventType ? [root] : r?.events ?? r?.history?.events
   if (!Array.isArray(raw)) throw new Error('Expected a history: {"events": [...]}, {"history": {"events": [...]}} or an array of events.')
   if (!raw.length) throw new Error('History contains no events.')
-  return raw.map((e: Obj, i) => {
+  const events: Ev[] = raw.map((e: Obj, i) => {
     if (!e || typeof e !== 'object') throw new Error(`Event #${i + 1} is not an object.`)
     let type: string
     try { type = eventTypeName(e.eventType) } catch (err) { throw new Error(`Event #${i + 1}: ${(err as Error).message}.`) }
@@ -154,6 +163,37 @@ function parseEvents(text: string): Ev[] {
       throw new Error(`${NOT_TEMPORAL} event #${i + 1} has type "${e.eventType}", which is not a Temporal event type.`)
     return { id: Number(e.eventId ?? i + 1), type, time, attrs: (key ? e[key] : e.attributes) ?? {}, bytes: JSON.stringify(e).length, rawType: e.eventType }
   })
+  // GetWorkflowExecutionHistory returns long histories one page at a time; a token means more events exist.
+  const token = Array.isArray(root) ? undefined : r?.nextPageToken ?? r?.next_page_token
+  if (token) (events as ParsedEvents).nextPageToken = String(token)
+  return events
+}
+
+/** parseHistory result; carries the response's `nextPageToken` when the export is one page of a longer history. */
+export type ParsedEvents = Ev[] & { nextPageToken?: string }
+
+const CLOSING = /^WorkflowExecution(Completed|Failed|TimedOut|Canceled|Terminated|ContinuedAsNew)$/
+
+/** Work out whether `events` are the whole history so far, from the page token, the first event and the event ids. */
+export function assessCompleteness(events: Ev[], nextPageToken?: string): Completeness {
+  const reasons: string[] = []
+  if (nextPageToken) reasons.push('The export has a nextPageToken, so it is one page of a longer history and the later events were not loaded.')
+  const first = events[0]
+  const last = events[events.length - 1]
+  let irregular = !Number.isInteger(first.id) || first.id < 1
+  if (!irregular && first.id > 1) reasons.push(`The history starts at event ${first.id}, so ${first.id === 2 ? 'event 1 is' : `events 1-${first.id - 1} are`} missing.`)
+  else if (!irregular && first.type !== 'WorkflowExecutionStarted') reasons.push(`The first event is ${first.type}, not WorkflowExecutionStarted.`)
+  const gaps: string[] = []
+  for (let i = 1; i < events.length; i++) {
+    const prev = events[i - 1].id, cur = events[i].id
+    if (cur === prev + 1) continue
+    if (Number.isInteger(prev) && Number.isInteger(cur) && cur > prev + 1) gaps.push(cur === prev + 2 ? `${prev + 1}` : `${prev + 1}-${cur - 1}`)
+    else irregular = true
+  }
+  if (gaps.length) reasons.push(`Event ids are not contiguous (missing: ${gaps.slice(0, 4).join(', ')}${gaps.length > 4 ? ` and ${gaps.length - 4} more gap(s)` : ''}).`)
+  if (irregular) reasons.push('Event ids are duplicated, out of order or not numbers, so missing events cannot be ruled out.')
+  if (reasons.length) return { state: 'partial', reasons }
+  return { state: CLOSING.test(last.type) ? 'complete' : 'running', reasons }
 }
 
 // ---------- helpers ----------
@@ -378,7 +418,7 @@ export function analyze(events: Ev[], name = 'history'): Analysis {
   if (sws) actions.push({ kind: 'Signal-With-Start', count: 0, note: 'The first Signal was delivered with the start and billed as one Action with it.' })
   const totalActions = actions.reduce((n, r) => n + r.count, 0)
 
-  const status = /^WorkflowExecution(Completed|Failed|TimedOut|Canceled|Terminated|ContinuedAsNew)$/.exec(last.type)?.[1] ?? 'Running'
+  const status = CLOSING.exec(last.type)?.[1] ?? 'Running'
   const payloadBytes = payloads.reduce((n, p) => n + p.bytes, 0)
   const jsonBytes = events.reduce((n, e) => n + e.bytes, 0)
   const groups = new Map<string, Analysis['payloadSources'][number]>()
@@ -407,6 +447,7 @@ export function analyze(events: Ev[], name = 'history'): Analysis {
     timers, resets,
     workflowTaskFailures: [...wtfCauses].map(([cause, count]) => ({ cause, count })),
     suggestContinueAsNew: suggestCAN,
+    completeness: assessCompleteness(events, (events as ParsedEvents).nextPageToken),
     timeline: events.map(e => ({ time: e.time, cat: category(e.type), failed: /Failed|TimedOut|Terminated/.test(e.type) && !/RESET_WORKFLOW/.test(String(e.attrs.cause)) })),
     recs: [],
   }
@@ -443,8 +484,10 @@ function payloadSource(e: Ev, byId: Map<number, Ev>): string {
 
 export interface Projection { eventsPerDay: number; bytesPerDay: number; daysTo: Record<'eventsWarn' | 'eventsMax' | 'bytesWarn' | 'bytesMax', number | null> }
 
-/** Linear growth over the observed wall-clock span; null when the span is too short to extrapolate. */
+/** Linear growth over the observed wall-clock span; null when the span is too short to extrapolate or events are missing. */
 export function project(a: Analysis): Projection | null {
+  // With events missing, neither the totals nor the observed span describe the run, so a growth rate would be a guess.
+  if (a.completeness.state === 'partial') return null
   const days = a.durationMs / 86_400_000
   if (days < 1 / 1440 || a.eventCount < 2) return null
   const eventsPerDay = a.eventCount / days
@@ -484,8 +527,12 @@ export function tieredCost(actions: number): number {
 export const fmtBytes = (n: number) =>
   n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 ** 2).toFixed(2)} MB`
 
+export const NO_ISSUES = 'No issues found'
+export const NO_ISSUES_SO_FAR = 'No issues found so far'
+
 export function recommend(a: Analysis): Rec[] {
   const recs: Rec[] = []
+  const partial = a.completeness.state === 'partial'
   const p = project(a)
   const running = a.status === 'Running'
   const evShare = a.eventCount / LIMITS.eventsWarn
@@ -573,11 +620,22 @@ export function recommend(a: Analysis): Rec[] {
     })
   }
 
-  if (!recs.length) recs.push({
-    severity: 'info', title: 'No issues found',
+  // Only a history with nothing missing can be called healthy, and a run that is still open only so far.
+  if (!recs.length && a.completeness.state !== 'partial') recs.push(a.completeness.state === 'running' ? {
+    severity: 'info', title: NO_ISSUES_SO_FAR,
+    detail: 'History size, payloads, retries and Action mix are within limits so far. This run is still open, so these figures cover only the events up to now and will grow; check again later. If the export was cut off rather than the workflow still running, the events after the last one shown are not reflected.',
+    doc: DOCS.limits, docLabel: 'Limits',
+  } : {
+    severity: 'info', title: NO_ISSUES,
     detail: 'History size, payloads, retries and Action mix are all comfortably within limits for this run.',
     doc: DOCS.limits, docLabel: 'Limits',
   })
   const order = { bad: 0, warn: 1, info: 2 }
-  return recs.sort((x, y) => order[x.severity] - order[y.severity])
+  recs.sort((x, y) => order[x.severity] - order[y.severity])
+  if (partial) recs.unshift({
+    severity: 'warn', title: 'Partial history: events are missing',
+    detail: `${a.completeness.reasons.join(' ')} Everything here covers only the events provided. The missing events may hold the part that breaks a limit, so this history gets no clean bill of health, and the Action count and cost are lower bounds. Export the complete history (temporal workflow show -w <workflow-id> --output json fetches every page) and load that instead.`,
+    doc: DOCS.events, docLabel: 'Events',
+  })
+  return recs
 }
