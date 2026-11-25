@@ -39,7 +39,7 @@ E2E_PORT=4500 npm run test:e2e    # use another port (default 4173; the run fail
 ```
 
 The tests block all network access except the preview server, so nothing reaches Supabase, analytics or the web fonts, and they fail on uncaught page errors or on any new external host.
-Cases marked `test.fail` in `e2e/partial.spec.ts` document known app bugs (linked in the file); they flip to failures once the bug is fixed and then need the `.fail` removed.
+A known app bug is documented as a `test.fail` case that links its issue; it flips to a failure once the bug is fixed and then needs the `.fail` removed.
 
 ### CI and deployments
 
